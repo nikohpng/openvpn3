@@ -27,21 +27,25 @@ std::string dummysecp256key = "-----BEGIN PRIVATE KEY-----\n"
                               "3oP+eSyQewIqu8XJECJhmt8NoXqNNYRUF0P+Jit8LC2a+2WZeyAwuIYT\n"
                               "-----END PRIVATE KEY-----\n";
 
-std::string minimalConfig = "remote wooden.box\n"
-                            "<ca>\n"
-                            + dummysecp256cert + "</ca>\n"
-                            + "<cert>\n"
-                            + dummysecp256cert + "</cert>\n"
-                            + "<key>\n" + dummysecp256key
-                            + "</key>\n";
+std::string certconfig = "<ca>\n"
+                         + dummysecp256cert + "</ca>\n"
+                         + "<cert>\n"
+                         + dummysecp256cert + "</cert>\n"
+                         + "<key>\n" + dummysecp256key
+                         + "</key>\n";
 
-void load_client_config(const std::string &config_content)
+std::string minimalConfig = certconfig + "\n"
+                            + "client\n"
+                              "remote wooden.box\n";
+
+void load_client_config(const std::string &config_content, bool dco = false)
 {
     OptionList options;
     ClientOptions::Config config;
+    config.clientconf.dco = true;
+    config.proto_context_options.reset(new ProtoContextCompressionOptions());
 
     ClientAPI::OpenVPNClientHelper client_helper;
-
     ParseClientConfig conf = ParseClientConfig::parse(config_content);
 
     auto parsed_config = ParseClientConfig::parse(config_content, nullptr, options);
@@ -86,6 +90,12 @@ TEST(config, parse_unknown_option)
         "sorry, unsupported options present in configuration: UNKNOWN/UNSUPPORTED OPTIONS");
 }
 
+TEST(config, duplicate_option)
+{
+    /* A duplicate option should not cause our parser to fail */
+    load_client_config(minimalConfig + "cipher AES-192-CBC\ncipher AES-256-GCM\n");
+}
+
 TEST(config, parse_ignore_unkown)
 {
     /* Bikeshed colour is ignored should throw no error */
@@ -113,7 +123,6 @@ TEST(config, parse_management)
         load_client_config(minimalConfig + "management"),
         option_error,
         "OpenVPN management interface is not supported by this client");
-
 }
 
 TEST(config, duplicate_options_sets)
@@ -121,6 +130,8 @@ TEST(config, duplicate_options_sets)
     /* Do the whole dance to get a ClientOption object to access the list */
     OptionList options;
     ClientOptions::Config config;
+    config.clientconf.dco = false;
+    config.proto_context_options = new ProtoContextCompressionOptions();
 
     ClientAPI::OpenVPNClientHelper client_helper;
 
@@ -153,4 +164,90 @@ TEST(config, duplicate_options_sets)
             allOptions.insert(optname);
         }
     }
+}
+
+TEST(config, dco_compatibility)
+{
+    for (auto optname : ClientOptions::dco_incompatible_opts)
+    {
+        ClientAPI::Config api_config;
+
+        /* If we just use http-proxy without argument, we will bail out for
+         * missing parameter instead */
+        if (optname == "http-proxy")
+            optname = "proto tcp\nhttp-proxy 1.1.1.1 8080";
+
+        api_config.dco = true;
+        api_config.content = minimalConfig + optname;
+        ClientAPI::OpenVPNClientHelper client_helper;
+        auto eval = client_helper.eval_config(api_config);
+
+        EXPECT_FALSE(eval.dcoCompatible);
+
+        OVPN_EXPECT_THROW(
+            load_client_config(minimalConfig + optname),
+            option_error,
+            "option_error: dco_compatibility: config/options are not compatible with dco");
+    }
+}
+
+TEST(config, client_missing_in_config)
+{
+    std::string configNoClient = certconfig + "\nremote 1.2.3.4\n";
+    OVPN_EXPECT_THROW(
+        load_client_config(configNoClient),
+        option_error,
+        "option_error: Neither 'client' nor both 'tls-client' and 'pull' options declared. OpenVPN3 client only supports --client mode.");
+}
+
+TEST(config, pull_and_tlsclient_in_config)
+{
+    std::string configNoClient = certconfig + "\nremote 1.2.3.4\ntls-client\npull\n";
+    /* Should not trigger an error, even without --client in place */
+    load_client_config(configNoClient);
+}
+
+TEST(config, pull_and_client_and_tlsclient_in_config)
+{
+    std::string configNoClient = certconfig + "\nremote 1.2.3.4\ntls-client\npull\nclient\n";
+    /* Should not trigger an error. Redundant options are no problem */
+    load_client_config(configNoClient);
+}
+
+TEST(config, onlypullortlsclient)
+{
+    std::array<std::string, 2> options{"tls-client", "pull"};
+
+    for (const auto &opt : options)
+    {
+        std::string configNoClient = certconfig + "\nremote 1.2.3.4\n" + opt + "\n";
+        OVPN_EXPECT_THROW(
+            load_client_config(configNoClient),
+            option_error,
+            "option_error: Neither 'client' nor both 'tls-client' and 'pull' options declared. OpenVPN3 client only supports --client mode.");
+    }
+}
+
+TEST(config, meta_option_in_content)
+{
+    OptionList options;
+    auto cfg = minimalConfig + "\n# OVPN_ACCESS_SERVER_AAA=BBB";
+
+    OptionList::KeyValueList kvl;
+    kvl.push_back(new OptionList::KeyValue("OVPN_ACCESS_SERVER_CCC", "DDD"));
+
+    auto parsed_config = ParseClientConfig::parse(cfg, &kvl, options);
+
+    ClientOptions::Config config;
+    config.clientconf.dco = true;
+    config.proto_context_options.reset(new ProtoContextCompressionOptions());
+    ClientOptions cliopt(options, config);
+
+    auto opt = options.get("AAA");
+    ASSERT_TRUE(opt.meta());
+    ASSERT_EQ(opt.get(1, 256), "BBB");
+
+    opt = options.get("CCC");
+    ASSERT_TRUE(opt.meta());
+    ASSERT_EQ(opt.get(1, 256), "DDD");
 }
