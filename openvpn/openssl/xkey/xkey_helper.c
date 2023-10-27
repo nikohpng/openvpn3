@@ -58,7 +58,7 @@ print_openssl_errors(void)
  */
 EVP_PKEY *
 xkey_load_generic_key(OSSL_LIB_CTX *libctx, void *handle, EVP_PKEY *pubkey,
-                      XKEY_EXTERNAL_SIGN_fn sign_op, XKEY_PRIVKEY_FREE_fn free_op)
+                      XKEY_EXTERNAL_SIGN_fn *sign_op, XKEY_PRIVKEY_FREE_fn *free_op)
 {
     EVP_PKEY *pkey = NULL;
     const char *origin = "external";
@@ -68,8 +68,8 @@ xkey_load_generic_key(OSSL_LIB_CTX *libctx, void *handle, EVP_PKEY *pubkey,
         {"xkey-origin", OSSL_PARAM_UTF8_STRING, (char *) origin, 0, 0},
         {"pubkey", OSSL_PARAM_OCTET_STRING, &pubkey, sizeof(pubkey), 0},
         {"handle", OSSL_PARAM_OCTET_PTR, &handle, sizeof(handle), 0},
-        {"sign_op", OSSL_PARAM_OCTET_PTR, (void **) &sign_op, sizeof(void *), 0},
-        {"free_op", OSSL_PARAM_OCTET_PTR, (void **) &free_op, sizeof(void *), 0},
+        {"sign_op", OSSL_PARAM_OCTET_PTR, (void **) &sign_op, sizeof(sign_op), 0},
+        {"free_op", OSSL_PARAM_OCTET_PTR, (void **) &free_op, sizeof(free_op), 0},
         {NULL, 0, NULL, 0, 0}
     };
 
@@ -81,7 +81,7 @@ xkey_load_generic_key(OSSL_LIB_CTX *libctx, void *handle, EVP_PKEY *pubkey,
     {
         print_openssl_errors();
         msg(M_WARN, "OpenSSL error: failed to load key into ovpn.xkey provider");
-		pkey = NULL;
+        pkey = NULL;
     }
     if (ctx)
     {
@@ -148,7 +148,7 @@ xkey_encode_pkcs1(unsigned char *enc, size_t *enc_len, const char *mdname,
                         MAKE_DI(sha512), MAKE_DI(sha224), MAKE_DI(sha512_224),
                         MAKE_DI(sha512_256), {0,NULL,0}};
 
-    int out_len = 0;
+    size_t out_len = 0;
     int ret = 0;
 
     int nid = OBJ_sn2nid(mdname);
@@ -165,7 +165,7 @@ xkey_encode_pkcs1(unsigned char *enc, size_t *enc_len, const char *mdname,
 
     if (tbslen != EVP_MD_size(EVP_get_digestbyname(mdname)))
     {
-        msg(M_WARN, "Error: encode_pkcs11: invalid input length <%d>", (int)tbslen);
+        msg(M_WARN, "Error: encode_pkcs11: invalid input length <%zu>", tbslen);
         goto done;
     }
 
@@ -194,13 +194,12 @@ xkey_encode_pkcs1(unsigned char *enc, size_t *enc_len, const char *mdname,
 
     out_len = tbslen + di->sz;
 
-    if (enc && (out_len <= (int) *enc_len))
+    if (enc && (out_len <= *enc_len))
     {
         /* combine header and digest */
         memcpy(enc, di->header, di->sz);
         memcpy(enc + di->sz, tbs, tbslen);
-        dmsg(D_XKEY, "encode_pkcs1: digest length = %d encoded length = %d",
-             (int) tbslen, (int) out_len);
+        dmsg(D_XKEY, "encode_pkcs1: digest length = %zu encoded length = %zu", tbslen, out_len);
         ret = true;
     }
 
@@ -212,26 +211,26 @@ done:
 
 void xkey_set_logging_cb_function(XKEY_LOGGING_CALLBACK_fn logfunc)
 {
-  xkey_log_callback = logfunc;
+    xkey_log_callback = logfunc;
 }
 
 
-void
-openvpn_msg_xkey_compat(const unsigned int flags, const char *format, ...) {
-  va_list arglist;
-  va_start(arglist, format);
+void openvpn_msg_xkey_compat(const unsigned int flags, const char *format, ...)
+{
+    va_list arglist;
+    va_start(arglist, format);
 
-  char msgbuf[4096] = { 0 };
+    char msgbuf[4096] = {0};
 
-  vsnprintf(msgbuf, sizeof(msgbuf), format, arglist);
+    vsnprintf(msgbuf, sizeof(msgbuf), format, arglist);
 
-  /* Do not print debug messages from the xkey provider */
-  bool debug = (flags & D_XKEY) == 0;
-  if (debug && xkey_log_callback != NULL)
-  {
-	  xkey_log_callback(msgbuf, debug);
-  }
-  va_end(arglist);
+    /* Do not print debug messages from the xkey provider */
+    bool debug = (flags & D_XKEY) == 0;
+    if (debug && xkey_log_callback != NULL)
+    {
+        xkey_log_callback(msgbuf, debug);
+    }
+    va_end(arglist);
 }
 
 #endif /* HAVE_XKEY_PROVIDER */

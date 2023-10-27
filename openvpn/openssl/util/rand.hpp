@@ -4,7 +4,7 @@
 //               packet encryption, packet authentication, and
 //               packet compression.
 //
-//    Copyright (C) 2012-2020 OpenVPN Inc.
+//    Copyright (C) 2012-2022 OpenVPN Inc.
 //
 //    This program is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU Affero General Public License Version 3
@@ -29,10 +29,11 @@
 #include <openssl/rand.h>
 
 #include <openvpn/random/randapi.hpp>
+#include <openvpn/common/numeric_util.hpp>
 
 namespace openvpn {
-  class OpenSSLRandom : public RandomAPI
-  {
+class OpenSSLRandom : public RandomAPI
+{
   public:
     OPENVPN_EXCEPTION(rand_error_openssl);
 
@@ -44,35 +45,35 @@ namespace openvpn {
 
     virtual std::string name() const
     {
-      return "OpenSSLRandom";
+        return "OpenSSLRandom";
     }
 
     // Return true if algorithm is crypto-strength
     virtual bool is_crypto() const
     {
-      return true;
+        return true;
     }
 
     // Fill buffer with random bytes
     virtual void rand_bytes(unsigned char *buf, size_t size)
     {
-      if (!rndbytes(buf, size))
-	throw rand_error_openssl("rand_bytes");
+        if (!rndbytes(buf, size))
+            throw rand_error_openssl("rand_bytes");
     }
 
     // Like rand_bytes, but don't throw exception.
     // Return true on successs, false on fail.
     virtual bool rand_bytes_noexcept(unsigned char *buf, size_t size)
     {
-      return rndbytes(buf, size);
+        return rndbytes(buf, size);
     }
 
   private:
     bool rndbytes(unsigned char *buf, size_t size)
     {
-      return RAND_bytes(buf, size) == 1;
+        return is_safe_conversion<int>(size) ? RAND_bytes(buf, static_cast<int>(size)) == 1 : false;
     }
-  };
-}
+};
+} // namespace openvpn
 
 #endif
