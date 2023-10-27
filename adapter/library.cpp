@@ -21,10 +21,10 @@ private:
 
     callbacks_delegate callbacks;
 
-    virtual bool socket_protect(int socket) override {
-        //defined in tunel builder delegate - called when external tunnel setup is used
-        return delegate_socket_protect(socket);
-    }
+//    virtual bool socket_protect(int socket) override {
+//        //defined in tunel builder delegate - called when external tunnel setup is used
+//        return delegate_socket_protect(socket);
+//    }
 
     virtual void event(const ClientAPI::Event &ev) override {
         conn_event myEvent;
@@ -82,7 +82,7 @@ void * new_session(config config, user_credentials credentials , callbacks_deleg
     Client * clientPtr = NULL;
 
     try {
-        Client::init_process();
+        //Client::init_process();
 
         ClientAPI::Config config_api;
         config_api.content = config.profileContent;
@@ -119,7 +119,7 @@ void * new_session(config config, user_credentials credentials , callbacks_deleg
             delete clientPtr;
             clientPtr = NULL;
         }
-        Client::uninit_process();
+//        Client::uninit_process();
     }
 
 
@@ -145,7 +145,7 @@ void stop_session(void *ptr) {
 void cleanup_session(void *ptr) {
     Client *client = (Client *)(ptr);
     delete client;
-    Client::uninit_process();
+//    Client::uninit_process();
 }
 
 void reconnect_session(void *ptr, int seconds) {
@@ -154,6 +154,6 @@ void reconnect_session(void *ptr, int seconds) {
 }
 
 void check_library(user_callback_data userData, log_callback logCallback) {
-    logCallback(userData, (char *)ClientAPI::OpenVPNClient::platform().c_str());
-    logCallback(userData, (char *)ClientAPI::OpenVPNClient::copyright().c_str());
+//    logCallback(userData, (char *)ClientAPI::OpenVPNClient::platform().c_str());
+//    logCallback(userData, (char *)ClientAPI::OpenVPNClient::copyright().c_str());
 }
