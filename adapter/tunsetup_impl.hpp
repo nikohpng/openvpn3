@@ -205,10 +205,10 @@ public :
     // blocked, to prevent unencrypted IPv6 packet leakage when the
     // tunnel is IPv4-only, but the local machine has IPv6 connectivity
     // to the internet.  Enabled by "block-ipv6" config var.
-    virtual bool tun_builder_set_block_ipv6(bool block_ipv6) override
-    {
-        return callbacks.set_block_ipv6(callbacks.usrData, block_ipv6);
-    }
+//    virtual bool tun_builder_set_block_ipv6(bool block_ipv6) override
+//    {
+//        return callbacks.set_block_ipv6(callbacks.usrData, block_ipv6);
+//    }
 
     // Optional callback to set a DNS suffix on tun/tap adapter.
     // Currently only implemented on Windows, where it will
